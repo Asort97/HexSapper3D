@@ -51,6 +51,7 @@ public class HexCell : MonoBehaviour
         UpdateVisual();
 
         revealTween = transform.DOLocalRotate(new Vector3(0, 0, 180f), 0.5f).SetAutoKill(false);
+        cellDown = transform.DOLocalMoveY(-1f, 1f);
 
         flag.SetActive(false);
 
