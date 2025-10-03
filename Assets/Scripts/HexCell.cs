@@ -148,6 +148,7 @@ public class HexCell : MonoBehaviour
     // Для быстрого теста кликом мыши
     public void OnMouseDown()
     {
+        if (!GameManager.Instance.isGameStarted) return;
         if (!grid.CanInteract) return;
 
         Reveal();
@@ -155,6 +156,7 @@ public class HexCell : MonoBehaviour
 
     public void OnMouseOver()
     {
+        if (!GameManager.Instance.isGameStarted) return;
         if (!grid.CanInteract) return;
     
         if (Input.GetMouseButtonDown(1)) ToggleFlag();
@@ -173,6 +175,7 @@ public class HexCell : MonoBehaviour
 
     public void OnMouseExit()
     {
+        if (!GameManager.Instance.isGameStarted) return;
         if (!grid.CanInteract) return;
 
         SetHighlight(false);

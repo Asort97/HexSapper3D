@@ -14,13 +14,6 @@ namespace YG
         public MonoBehaviour[] topPlayerActivityComponents = new MonoBehaviour[0];
         public MonoBehaviour[] thisPlayerActivityComponents = new MonoBehaviour[0];
 
-        [Serializable]
-        public struct TextLegasy
-        {
-            public Text rank, name, score;
-        }
-        public TextLegasy textLegasy;
-
 #if YG_TEXT_MESH_PRO
         [Serializable]
         public struct TextMP
@@ -48,10 +41,6 @@ namespace YG
         [ContextMenu(nameof(UpdateEntries))]
         public void UpdateEntries()
         {
-            if (textLegasy.rank && data.rank != null) textLegasy.rank.text = data.rank.ToString();
-            if (textLegasy.name && data.name != null) textLegasy.name.text = data.name;
-            if (textLegasy.score && data.score != null) textLegasy.score.text = data.score.ToString();
-
 #if YG_TEXT_MESH_PRO
             if (textMP.rank && data.rank != null) textMP.rank.text = data.rank.ToString();
             if (textMP.name && data.name != null) textMP.name.text = data.name;

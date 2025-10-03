@@ -8,6 +8,18 @@ using UnityEngine.UI;
 public class GameManager : MonoBehaviour
 {
     [SerializeField] private TMP_Text levelText;
+
+    [Header("Menus")]
+    [SerializeField] private CanvasGroup menuGroup;
+    [SerializeField] private CanvasGroup gameplayGroup;
+
+    [Header("Win UI")]
+    [SerializeField] private RectTransform winPanel;
+    [SerializeField] private ParticleSystem winParticles;
+    private Sequence _winTween;
+
+    [Space(5)]
+    [Header("AD Revive")]
     [SerializeField] private RectTransform adPanel;
     [SerializeField] private float adPanelTimer = 10f;
     [SerializeField] private TMP_Text adPanelTimerText;
@@ -18,6 +30,7 @@ public class GameManager : MonoBehaviour
     private float _adTimer;
     public Action LoseEvent;
     public Action WinEvent;
+    public bool isGameStarted;
 
     private void Awake()
     {
@@ -27,9 +40,40 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         _adTimer = adPanelTimer;
+
+        _winTween = DOTween.Sequence()
+        .AppendCallback(() => winPanel.gameObject.SetActive(true))
+        .Append(winPanel.DOScale(1.4f, 0.7f).SetEase(Ease.OutBounce))
+        .InsertCallback(0.2f, () => winParticles.Play())
+        .AppendInterval(1.5f)
+        .Append(winPanel.DOScale(0.5f, 0.5f).SetEase(Ease.InSine))
+        .SetAutoKill(false)
+        .OnComplete(()=> winPanel.gameObject.SetActive(false));
+    }
+    
+    private void Update()
+    {
+        AdTimer();
     }
 
-    private void Update()
+    public void StartGame()
+    {
+        menuGroup.DOFade(0, 1f).Play().OnComplete(()=> { menuGroup.gameObject.SetActive(false); isGameStarted = true; });
+
+        gameplayGroup.gameObject.SetActive(true);
+        gameplayGroup.DOFade(1, 1f).Play();
+    }
+
+    public void ShowWinPanel()
+    {
+        // winParticles.Play();
+        _winTween.Restart();
+        isGameStarted = true;
+
+        // await UniTask.Delay(TimeSpan.FromSeconds(2.5f));
+    }
+
+    private void AdTimer()
     {
         if (_adPanelShowed && adPanel.gameObject.activeInHierarchy)
         {
