@@ -46,8 +46,10 @@ public class HexGrid : MonoBehaviour
         (-1, 0), (-1,+1), (0,+1)
     };
 
-    void Start()
+    private void Start()
     {
+        randomSeed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+
         GenerateEmptyGridHex();
         // PlaceMines(null);        // или отложить до 1-го клика, если хотите более мягкий firstClick
         ComputeAdjacency();

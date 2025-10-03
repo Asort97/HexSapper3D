@@ -823,7 +823,7 @@ PlayerSettings:
     PS4: DOTWEEN
     PS5: DOTWEEN
     QNX: DOTWEEN
-    Standalone: DOTWEEN;YG_PLUGIN_YANDEX_GAME
+    Standalone: DOTWEEN;YG_PLUGIN_YANDEX_GAME;YG_TEXT_MESH_PRO
     WebGL: DOTWEEN
     Windows Store Apps: DOTWEEN
     XboxOne: DOTWEEN

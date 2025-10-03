@@ -99,7 +99,9 @@ public class CampaignManager : MonoBehaviour
 
     public void OnLevelWin()
     {
-        userRatingManager.AddPoints(30);
+        GameManager.Instance.ShowWinPanel();
+
+        userRatingManager.AddPoints(25);
 
         NextLevelRoutine();
     }
