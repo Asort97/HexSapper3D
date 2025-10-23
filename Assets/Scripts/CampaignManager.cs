@@ -1,126 +1,110 @@
 using UnityEngine;
 using DG.Tweening;
-using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using System;
+using YG;
 
 public class CampaignManager : MonoBehaviour
 {
-    public HexGrid gridPrefab;   // твой HexGrid префаб
+    public HexGrid gridPrefab;
     public Transform gridParent;
     [SerializeField] private Transform cameraTransform;
     [SerializeField] private float offset;
     [SerializeField] private TimerManager timerManager;
     [SerializeField] private UserRatingManager userRatingManager;
-
+    [SerializeField] private CameraFieldFitter cameraFieldFitter;
     private HexGrid _currentGrid;
     private HexGrid _previousGrid;
     private int currentLevel = 1;
     private Transform currentContainer;
 
-    private void Start()
-    {
-        StartLevel(currentLevel);
-    }
+    private void Start() => StartLevel(currentLevel);
 
     private void StartLevel(int level)
     {
-        // контейнер
         currentContainer = new GameObject($"GridContainer_{level}").transform;
 
         float newX = 0;
-
-        if(_currentGrid)
-            _previousGrid = _currentGrid;
+        if (_currentGrid) _previousGrid = _currentGrid;
 
         if (level > 1)
         {
             newX = offset * level;
             currentContainer.position = new Vector3(newX, 0, 0);
             cameraTransform.DOLocalMoveX(newX, 0.8f)
-            .SetEase(Ease.InOutCubic)
-            .Play()
-            .OnComplete(() =>
-            {
-                if (_previousGrid != null)
-                {
-                    Destroy(_previousGrid.gameObject);
-                }
-            });
+                .SetEase(Ease.InOutCubic)
+                .OnComplete(() => { if (_previousGrid) Destroy(_previousGrid.gameObject); })
+                .Play();
         }
 
         currentContainer.SetParent(gridParent);
+        currentContainer.localScale = Vector3.one;
 
-        currentContainer.localScale = Vector3.one;           // 1 во время генерации!
-
-        // грид
         _currentGrid = Instantiate(gridPrefab, currentContainer);
         _currentGrid.transform.localScale = Vector3.one;
 
-        // генерим поле
+        // Настройка параметров
         _currentGrid.hexRadiusRings = GetRadiusForLevel(level);
-        _currentGrid.hexWorldRadius = Mathf.Max(0.1f, _currentGrid.hexWorldRadius); // страхуемся
-        _currentGrid.explicitMineCount = GetMinesForLevel(level);
+        _currentGrid.mineRate = Mathf.Clamp01(0.08f + 0.02f * (level - 1));  // плавный рост сложности
+
+        // 🔹 ТОЛЬКО пустая сетка (мины появятся после клика)
         _currentGrid.GenerateEmptyGridHex();
-        _currentGrid.PlaceMines(null);
-        _currentGrid.ComputeAdjacency();
 
-        _currentGrid.OnGridCompleted += () =>
-        {
-            Debug.Log("Level complete → запускаем переход");
-            OnLevelWin(); // твой метод перехода к следующему уровню
-        };
-
+        // подписка на событие победы
+        _currentGrid.OnGridCompleted += () => OnLevelWin();
     }
 
     private void OnEnable()
     {
-        GameManager.Instance.WinEvent += OnLevelWin;
+        GameManager.Instance.WinEvent  += OnLevelWin;
         GameManager.Instance.LoseEvent += OnLevelLose;
     }
-
+    
     private void OnDisable()
     {
-        GameManager.Instance.WinEvent -= OnLevelWin; 
-        GameManager.Instance.LoseEvent -= OnLevelLose;    
+        GameManager.Instance.WinEvent -= OnLevelWin;
+        GameManager.Instance.LoseEvent -= OnLevelLose;
     }
 
     private int GetRadiusForLevel(int level)
     {
-        // каждые 4 уровня +1 радиус
-        return 2 + (level / 4);
-    }
+        int radius = 2 + (level / 1);
+        if (level % 1 == 0)
+        {
+            float newY = cameraTransform.position.y + 2.3F * level;
+            float newZ = cameraTransform.position.z - 2.3F * level;
 
-    private int GetMinesForLevel(int level)
-    {
-        // базовое количество + рост
-        return 1 + level * 2;
+
+            cameraFieldFitter.FitPerspectiveCameraToField(radius);
+            // cameraTransform.position = new Vector3(
+            //     cameraTransform.position.x,
+            //     newY,
+            //     newZ
+            // );
+        }
+        return radius;
     }
 
     public void OnLevelWin()
     {
         GameManager.Instance.ShowWinPanel();
-
-        userRatingManager.AddPoints(25);
-
+        userRatingManager.AddPoints(currentLevel*currentLevel);
         NextLevelRoutine();
     }
 
     public async void OnLevelLose()
     {
         userRatingManager.RemovePoints(5);
-
         await UniTask.Delay(TimeSpan.FromSeconds(1f));
-        await _currentGrid.ExplodeChainAsync(_currentGrid.LastRevealedCell);    
+        await _currentGrid.ExplodeChainAsync(_currentGrid.LastRevealedCell);
+        GameManager.Instance.ShowLosePanel();
     }
 
     private void NextLevelRoutine()
     {
         currentLevel++;
-
         GameManager.Instance.UpdateLevelText(currentLevel);
-        timerManager.AddTime(30);
-        
+        // timerManager.AddTime(currentLevel*currentLevel);
         StartLevel(currentLevel);
     }
 }

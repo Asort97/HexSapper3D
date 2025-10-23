@@ -12,7 +12,7 @@ namespace YG
     {
         public ImageLoadYG imageLoad;
         public MonoBehaviour[] topPlayerActivityComponents = new MonoBehaviour[0];
-        public MonoBehaviour[] thisPlayerActivityComponents = new MonoBehaviour[0];
+        public Image thisPlayerActivityComponents;
 
 #if YG_TEXT_MESH_PRO
         [Serializable]
@@ -62,35 +62,31 @@ namespace YG
                 }
             }
 
-            if (topPlayerActivityComponents.Length > 0)
-            {
-                if (data.inTop)
-                {
-                    ActivityMomoObjects(topPlayerActivityComponents, true);
-                }
-                else
-                {
-                    ActivityMomoObjects(topPlayerActivityComponents, false);
-                }
-            }
+            // if (topPlayerActivityComponents.Length > 0)
+            // {
+            //     if (data.inTop)
+            //     {
+            //         ActivityMomoObjects(topPlayerActivityComponents, true);
+            //     }
+            //     else
+            //     {
+            //         ActivityMomoObjects(topPlayerActivityComponents, false);
+            //     }
+            // }
 
-            if (thisPlayerActivityComponents.Length > 0)
+            if (thisPlayerActivityComponents != null)
             {
                 if (data.thisPlayer)
                 {
-                    ActivityMomoObjects(thisPlayerActivityComponents, true);
+
+                    thisPlayerActivityComponents.color = new Color(0.1076896f, 0.4150943f, 0.3219414f);
+                    // ActivityMomoObjects(thisPlayerActivityComponents, true);
                 }
                 else
                 {
-                    ActivityMomoObjects(thisPlayerActivityComponents, false);
-                }
-            }
+                    thisPlayerActivityComponents.color = new Color(0.129717f, 0.5188679f, 0.4010516f);
 
-            void ActivityMomoObjects(MonoBehaviour[] objects, bool activity)
-            {
-                for (int i = 0; i < objects.Length; i++)
-                {
-                    objects[i].enabled = activity;
+                    // ActivityMomoObjects(thisPlayerActivityComponents, false);
                 }
             }
         }
