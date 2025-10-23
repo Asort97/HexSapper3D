@@ -1,0 +1,77 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f18b3b36b33752c4ab7b66996817f57a, type: 3}
+  m_Name: RankHierarchy
+  m_EditorClassIdentifier: 
+  ranks:
+  - rankName: "Rookie 1"
+    score: 0
+  - rankName: "Rookie 2"
+    score: 500
+  - rankName: "Rookie 3"
+    score: 1000
+  - rankName: "Skilled 1"
+    score: 1500
+  - rankName: "Skilled 2"
+    score: 2000
+  - rankName: "Skilled 3"
+    score: 2500
+  - rankName: "Professional 1"
+    score: 3000
+  - rankName: "Professional 2"
+    score: 3500
+  - rankName: "Professional 3"
+    score: 4000
+  - rankName: "Expert 1"
+    score: 4500
+  - rankName: "Expert 2"
+    score: 5000
+  - rankName: "Expert 3"
+    score: 5500
+  - rankName: "Master 1"
+    score: 6000
+  - rankName: "Master 2"
+    score: 6500
+  - rankName: "Master 3"
+    score: 7000
+  - rankName: "Grandmaster 1"
+    score: 7500
+  - rankName: "Grandmaster 2"
+    score: 8000
+  - rankName: "Grandmaster 3"
+    score: 8500
+  - rankName: "Legend 1"
+    score: 9000
+  - rankName: "Legend 2"
+    score: 9500
+  - rankName: "Legend 3"
+    score: 10000
+  - rankName: "Mine Genius"
+    score: 10500
+  - rankName: "Immortal Deminer"
+    score: 11000
+  - rankName: "Field Lord"
+    score: 11500
+  - rankName: "Perfect Mind"
+    score: 12000
+  - rankName: "Mind of Silence"
+    score: 12500
+  - rankName: "Mine Sense"
+    score: 13000
+  - rankName: "Eye of the Strategist"
+    score: 13500
+  - rankName: "Deminer’s Shadow"
+    score: 14000
+  - rankName: "The Last Hero"
+    score: 14500
+  - rankName: "Absolute Mind"
+    score: 15000

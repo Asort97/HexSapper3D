@@ -426,7 +426,7 @@ MonoBehaviour:
   imageLoad: {fileID: 8382223315237772772}
   topPlayerActivityComponents:
   - {fileID: 2844915758674590819}
-  thisPlayerActivityComponents: []
+  thisPlayerActivityComponents: {fileID: 2844915758674590819}
   textMP:
     rank: {fileID: 8495603212625433897}
     name: {fileID: 308237530305337010}

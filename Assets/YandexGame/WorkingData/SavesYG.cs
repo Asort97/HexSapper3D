@@ -9,11 +9,13 @@ namespace YG
         public bool isFirstSession = true;
         public string language = "ru";
         public bool promptDone;
-
-
+        public int score;
+        public int rank;
+        
         // Вы можете выполнить какие то действия при загрузке сохранений
         public SavesYG()
         {
+
         }
     }
 }

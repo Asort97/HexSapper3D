@@ -2,6 +2,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using TMPro;
+using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -24,10 +25,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float adPanelTimer = 10f;
     [SerializeField] private TMP_Text adPanelTimerText;
     [SerializeField] private Image adPanelTimerBar;
+
     public static GameManager Instance;
     private bool _adPanelShowed;
     public bool AdReviveUsed;
     private float _adTimer;
+    private Sequence _startGameSequence;
     public Action LoseEvent;
     public Action WinEvent;
     public bool isGameStarted;
@@ -46,11 +49,17 @@ public class GameManager : MonoBehaviour
         .Append(winPanel.DOScale(1.4f, 0.7f).SetEase(Ease.OutBounce))
         .InsertCallback(0.2f, () => winParticles.Play())
         .AppendInterval(1.5f)
-        .Append(winPanel.DOScale(0.5f, 0.5f).SetEase(Ease.InSine))
+        .Append(winPanel.DOScale(0.5f, 0.3f).SetEase(Ease.OutBounce))
         .SetAutoKill(false)
-        .OnComplete(()=> winPanel.gameObject.SetActive(false));
+        .OnComplete(() => winPanel.gameObject.SetActive(false));
+
+        _startGameSequence = DOTween.Sequence()
+        .Append(menuGroup.DOFade(0, 1f))
+        .Join(menuGroup.transform.DOScale(2f, 1f))
+        .SetAutoKill(false)
+        .OnComplete(() => { menuGroup.gameObject.SetActive(false); isGameStarted = true; menuGroup.transform.localScale = new Vector3(1, 1, 1); });
     }
-    
+
     private void Update()
     {
         AdTimer();
@@ -58,7 +67,7 @@ public class GameManager : MonoBehaviour
 
     public void StartGame()
     {
-        menuGroup.DOFade(0, 1f).Play().OnComplete(()=> { menuGroup.gameObject.SetActive(false); isGameStarted = true; });
+        _startGameSequence.Restart();
 
         gameplayGroup.gameObject.SetActive(true);
         gameplayGroup.DOFade(1, 1f).Play();
@@ -71,6 +80,11 @@ public class GameManager : MonoBehaviour
         isGameStarted = true;
 
         // await UniTask.Delay(TimeSpan.FromSeconds(2.5f));
+    }
+
+    public void ShowLosePanel()
+    {
+
     }
 
     private void AdTimer()
@@ -149,5 +163,10 @@ public class GameManager : MonoBehaviour
     public void Lose()
     {
         LoseEvent?.Invoke();
+    }
+
+    public void ShowNewRankPanel(string previousRank, string newRank)
+    {
+
     }
 }
