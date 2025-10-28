@@ -24,13 +24,20 @@ public class HexGrid : MonoBehaviour
     private int totalSafeCells;
     private int revealedSafeCells;
     private bool _isDestroying;
-    private bool firstClickDone = false;
-    private bool _bulkRevealing = false;
+   private bool firstClickDone = false;
+   private bool _bulkRevealing = false;
+    private bool _canInteract = true;
 
     public IEnumerable<HexCell> GetAllCells() => cells.Values;
     public HexCell LastRevealedCell;
-    public bool CanInteract = true;
+    public bool CanInteract => _canInteract && !_isDestroying;
     public Action OnGridCompleted;
+    public event Action<HexCell> MineTriggered;
+
+    public void SetInteractionState(bool enabled)
+    {
+        _canInteract = enabled;
+    }
 
     private static readonly (int dq, int dr)[] DIRS = {
         (+1, 0), (+1,-1), (0,-1),
@@ -94,6 +101,7 @@ public class HexGrid : MonoBehaviour
         foreach (Transform ch in transform) Destroy(ch.gameObject);
         cells.Clear();
         IsGridDone = false;
+        _canInteract = true;
         totalSafeCells = 0;
         revealedSafeCells = 0;
         firstClickDone = false;
@@ -196,12 +204,10 @@ public class HexGrid : MonoBehaviour
         if (c.IsMine)
         {
             LastRevealedCell = c;
-            CanInteract = false;
+            SetInteractionState(false);
 
-            if (!GameManager.Instance.AdReviveUsed && !_isDestroying)
-                GameManager.Instance.ShowAdPanel(true);
-            else if (!_isDestroying)
-                GameManager.Instance.Lose();
+            if (!_isDestroying)
+                MineTriggered?.Invoke(c);
             return;
         }
 

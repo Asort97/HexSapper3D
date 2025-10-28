@@ -6,6 +6,7 @@ using UnityEngine.UI;
 public class ScoreDisplayer : MonoBehaviour
 {
     private Image bar;
+    [SerializeField] private UserRatingManager ratingManager;
     [SerializeField] private TMP_Text currentRank;
     [SerializeField] private TMP_Text nextRank;
     [SerializeField] private TMP_Text scoreText;
@@ -17,24 +18,41 @@ public class ScoreDisplayer : MonoBehaviour
 
     private void OnEnable()
     {
-        UserRatingManager.OnChangeScore += UpdateBar;
-        UserRatingManager.OnChangeRank += UpdateRank;
+        if (ratingManager == null) return;
+
+        ratingManager.ScoreChanged += UpdateBar;
+        ratingManager.RankChanged += UpdateRank;
+        ratingManager.BroadcastState();
     }
 
     private void OnDisable()
     {
-        UserRatingManager.OnChangeScore -= UpdateBar;
-        UserRatingManager.OnChangeRank -= UpdateRank;
+        if (ratingManager == null) return;
+
+        ratingManager.ScoreChanged -= UpdateBar;
+        ratingManager.RankChanged -= UpdateRank;
     }
 
     public void UpdateRank(string current, string next)
     {
-        currentRank.text = current;
-        nextRank.text = next;
+        if (currentRank != null)
+        {
+            currentRank.text = current;
+        }
+
+        if (nextRank != null)
+        {
+            nextRank.text = next;
+        }
     }   
      
     public void UpdateBar(float amount, int score, int needScore)
     {
+        if (bar == null)
+        {
+            bar = GetComponent<Image>();
+        }
+
         if (gameObject.activeInHierarchy)
         {
             bar.DOFillAmount(amount, 0.8f).SetEase(Ease.OutSine).Play();

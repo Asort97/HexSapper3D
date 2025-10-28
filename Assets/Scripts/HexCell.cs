@@ -3,8 +3,6 @@ using System;
 using TMPro;
 using DG.Tweening;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-
 public class HexCell : MonoBehaviour
 {
     [Header("Axial coords")]
@@ -35,6 +33,15 @@ public class HexCell : MonoBehaviour
     private Sequence flagUpSequence;
     private Tween cellDown;
     private Tween cellUp;
+
+    [Header("Hover Lift")]
+    [SerializeField] private float hoverHeightSelf = 0.35f;
+    [SerializeField] private float hoverHeightNeighbor = 0.18f;
+    [SerializeField] private float hoverDuration = 0.12f;
+    [SerializeField] private Ease hoverEase = Ease.OutQuad;
+
+    private float _baseLocalY;
+    private Tween _hoverTween;
     private HexGrid grid;
     public bool IsExploded { get; private set; }
 
@@ -52,6 +59,8 @@ public class HexCell : MonoBehaviour
 
         revealTween = transform.DOLocalRotate(new Vector3(0, 0, 180f), 0.5f).SetAutoKill(false);
         cellDown = transform.DOLocalMoveY(-1f, 1f);
+
+    _baseLocalY = transform.localPosition.y;
 
         flag.SetActive(false);
 
@@ -89,6 +98,12 @@ public class HexCell : MonoBehaviour
 
         revealTween.Play();
 
+        // Звук раскрытия клетки (без различия — взрыв обрабатывается отдельно)
+        SoundManager.Instance?.Play(SfxType.Cell_Reveal);
+
+        // На всякий случай опускаем клетку при раскрытии
+        ResetHoverHeight(hoverDuration * 0.6f);
+
         OnReveal?.Invoke(this);
     }
 
@@ -99,6 +114,9 @@ public class HexCell : MonoBehaviour
         Flagged = !Flagged;
 
         UpdateVisual();
+
+        // Звук установки/снятия флага
+        SoundManager.Instance?.Play(SfxType.Cell_Flag);
     }
 
     private void UpdateVisual()
@@ -142,13 +160,15 @@ public class HexCell : MonoBehaviour
         Debug.Log($"{gameObject.name} , spawned...");
         Instantiate(explosionParticle, transform.position, Quaternion.identity, null);
 
+        // Звук взрыва мины
+        SoundManager.Instance?.PlayAt(SfxType.Mine_Explode, transform.position);
+
         gameObject.SetActive(false);
     }
 
     // Для быстрого теста кликом мыши
     public void OnMouseDown()
     {
-        if (!GameManager.Instance.isGameStarted) return;
         if (!grid.CanInteract) return;
 
         Reveal();
@@ -156,26 +176,31 @@ public class HexCell : MonoBehaviour
 
     public void OnMouseOver()
     {
-        if (!GameManager.Instance.isGameStarted) return;
         if (!grid.CanInteract) return;
     
         if (Input.GetMouseButtonDown(1)) ToggleFlag();
-        
+
         SetHighlight(true);
 
+        // Поднятие основной клетки
+        SetHoverHeight(hoverHeightSelf, hoverDuration);
+
+        // Поднимаем только нераскрытых соседей
         if (grid != null)
         {
             foreach (var n in grid.GetNeighbors(q, r))
             {
                 if (!n.Revealed)
+                {
                     n.SetHighlight(true);
+                    n.SetHoverHeight(n.Flagged ? 0f : hoverHeightNeighbor, hoverDuration);
+                }
             }
         }
     }
 
     public void OnMouseExit()
     {
-        if (!GameManager.Instance.isGameStarted) return;
         if (!grid.CanInteract) return;
 
         SetHighlight(false);
@@ -185,12 +210,36 @@ public class HexCell : MonoBehaviour
             foreach (var n in grid.GetNeighbors(q, r))
             {
                 n.SetHighlight(false);
+                if (!n.Revealed)
+                    n.ResetHoverHeight(hoverDuration);
             }
         }
+
+        ResetHoverHeight(hoverDuration);
     }
 
     public void SetHighlight(bool state)
     {
         gameObject.layer = LayerMask.NameToLayer(state ? "Highlight" : "Default");
+    }
+
+    public void SetHoverHeight(float relativeY, float duration)
+    {
+        // Если клетка взорвана — ничего не делаем
+        if (!gameObject.activeInHierarchy) return;
+
+        var pos = transform.localPosition;
+        float targetY = _baseLocalY + relativeY;
+        _hoverTween?.Kill(false);
+        _hoverTween = transform.DOLocalMoveY(targetY, Mathf.Max(0.01f, duration)).SetEase(hoverEase);
+        _hoverTween.Play();
+    }
+
+    public void ResetHoverHeight(float duration)
+    {
+        if (!gameObject.activeInHierarchy) return;
+        _hoverTween?.Kill(false);
+        _hoverTween = transform.DOLocalMoveY(_baseLocalY, Mathf.Max(0.01f, duration)).SetEase(hoverEase);
+        _hoverTween.Play();
     }
 }

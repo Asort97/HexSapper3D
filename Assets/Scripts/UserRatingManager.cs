@@ -1,40 +1,30 @@
 using System;
-using TMPro;
 using UnityEngine;
 using YG;
 
 public class UserRatingManager : MonoBehaviour
 {
-    // [Serializable]
-    // public struct Rank
-    // {
-    //     public string rankName;
-    //     public int score;
-    // }
-
-    // [SerializeField] private Rank[] ranks;
     [SerializeField] private RankHierarchy rankHierarchy;
-    public static Action<float, int, int> OnChangeScore;
-    public static Action<string, string> OnChangeRank;
-    public int Score;
-    private int _rank;
+
+    public event Action<float, int, int> ScoreChanged;
+    public event Action<string, string> RankChanged;
+    public event Action<string, string> RankPromoted;
+
+    public int Score { get; private set; }
+
+    private int _rankIndex;
 
     private void Start()
     {
         Score = YandexGame.savesData.score;
-        _rank = YandexGame.savesData.rank;
-        
-        UpdateBars();
+        _rankIndex = YandexGame.savesData.rank;
+
+        BroadcastState();
     }
 
-    private void UpdateBars()
+    public void BroadcastState()
     {
-        float barAmount = GetNormalizedRankProgress();
-
-        Debug.Log(barAmount);
-
-        OnChangeScore?.Invoke(barAmount, Score, GetNextRank().score);
-        OnChangeRank?.Invoke(GetCurrentRank().rankName, GetNextRank().rankName);
+        UpdateStateBroadcast();
     }
 
     [ContextMenu("Clear saves")]
@@ -42,78 +32,95 @@ public class UserRatingManager : MonoBehaviour
     {
         YandexGame.ResetSaveProgress();
         YandexGame.SaveProgress();
+
+        Score = YandexGame.savesData.score;
+        _rankIndex = YandexGame.savesData.rank;
+
+        BroadcastState();
     }
 
     public void AddPoints(int amount)
     {
         Score += amount;
-
-
         YandexGame.savesData.score = Score;
         YandexGame.SaveProgress();
 
-        CheckRank();
-
-        UpdateBars();
+        CheckRankPromotion();
+        UpdateStateBroadcast();
     }
 
     public void RemovePoints(int amount)
     {
         Score = Mathf.Max(Score - amount, GetCurrentRank().score);
-
-        UpdateBars();
-        
         YandexGame.savesData.score = Score;
         YandexGame.SaveProgress();
+
+        UpdateStateBroadcast();
     }
-    
+
+    private void UpdateStateBroadcast()
+    {
+        float normalized = GetNormalizedRankProgress();
+
+        ScoreChanged?.Invoke(normalized, Score, GetNextRank().score);
+        RankChanged?.Invoke(GetCurrentRank().rankName, GetNextRank().rankName);
+    }
+
     private float GetNormalizedRankProgress()
     {
-        if (rankHierarchy.ranks == null || rankHierarchy.ranks.Length == 0) return 0f;
+        if (rankHierarchy == null || rankHierarchy.ranks == null || rankHierarchy.ranks.Length == 0)
+            return 0f;
 
-        if (_rank >= rankHierarchy.ranks.Length - 1)
+        if (_rankIndex >= rankHierarchy.ranks.Length - 1)
             return 1f;
 
-        int currentRankPoints = GetCurrentRank().score;
-        int nextRankPoints = GetNextRank().score;
+        Rank current = GetCurrentRank();
+        Rank next = GetNextRank();
 
-        // нормализуем от 0 до 1
-        Debug.Log($"CURR: {currentRankPoints} NEXT: {nextRankPoints}");
-        return Mathf.InverseLerp(currentRankPoints, nextRankPoints, Score);
+        if (Mathf.Approximately(next.score, current.score))
+            return 1f;
+
+        return Mathf.InverseLerp(current.score, next.score, Score);
     }
 
-    private void CheckRank()
+    private void CheckRankPromotion()
     {
-        if (GetCurrentRank().rankName == GetNextRank().rankName) return;
+        if (rankHierarchy == null || rankHierarchy.ranks == null || rankHierarchy.ranks.Length == 0)
+            return;
 
-        if (Score >= GetNextRank().score)
-        {
-            _rank++;
+        if (_rankIndex >= rankHierarchy.ranks.Length - 1)
+            return;
 
-            YandexGame.savesData.rank = _rank;
-            YandexGame.SaveProgress();
+        Rank nextRank = GetNextRank();
+        if (Score < nextRank.score)
+            return;
 
+        string previousRankName = GetCurrentRank().rankName;
 
-            int previousRank = Mathf.Clamp(_rank - 1, 0, rankHierarchy.ranks.Length - 1);
+        _rankIndex = Mathf.Min(_rankIndex + 1, rankHierarchy.ranks.Length - 1);
+        YandexGame.savesData.rank = _rankIndex;
+        YandexGame.SaveProgress();
 
-            OnChangeRank?.Invoke(GetCurrentRank().rankName, GetNextRank().rankName);
-
-            GameManager.Instance.ShowNewRankPanel(GetPreviousRank().rankName, GetCurrentRank().rankName);
-        }
+        string currentRankName = GetCurrentRank().rankName;
+        RankPromoted?.Invoke(previousRankName, currentRankName);
     }
 
     private Rank GetCurrentRank()
     {
-        return rankHierarchy.ranks[Mathf.Clamp(_rank, 0, rankHierarchy.ranks.Length - 1)];
+        if (rankHierarchy == null || rankHierarchy.ranks == null || rankHierarchy.ranks.Length == 0)
+            return default;
+
+        int index = Mathf.Clamp(_rankIndex, 0, rankHierarchy.ranks.Length - 1);
+        return rankHierarchy.ranks[index];
     }
 
     private Rank GetNextRank()
     {
-        return rankHierarchy.ranks[Mathf.Clamp(_rank+1, 0, rankHierarchy.ranks.Length - 1)];
-    }
-    
-    private Rank GetPreviousRank()
-    {
-        return rankHierarchy.ranks[Mathf.Clamp(_rank-1, 0, rankHierarchy.ranks.Length - 1)];
+        if (rankHierarchy == null || rankHierarchy.ranks == null || rankHierarchy.ranks.Length == 0)
+            return default;
+
+        int index = Mathf.Clamp(_rankIndex + 1, 0, rankHierarchy.ranks.Length - 1);
+        return rankHierarchy.ranks[index];
     }
 }
+

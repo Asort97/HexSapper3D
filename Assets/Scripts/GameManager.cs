@@ -2,171 +2,364 @@ using System;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using TMPro;
-using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class GameManager : MonoBehaviour
+public class GameManager : MonoBehaviour, ICampaignListener
 {
-    [SerializeField] private TMP_Text levelText;
+    [Header("Core Managers")]
+    [SerializeField] private CampaignManager campaignManager;
+    [SerializeField] private UserRatingManager userRatingManager;
 
-    [Header("Menus")]
+    [Header("UI")]
+    [SerializeField] private TMP_Text levelText;
     [SerializeField] private CanvasGroup menuGroup;
     [SerializeField] private CanvasGroup gameplayGroup;
 
     [Header("Win UI")]
     [SerializeField] private RectTransform winPanel;
     [SerializeField] private ParticleSystem winParticles;
-    private Sequence _winTween;
 
-    [Space(5)]
-    [Header("AD Revive")]
+    [Header("Ad Revive")]
     [SerializeField] private RectTransform adPanel;
     [SerializeField] private float adPanelTimer = 10f;
     [SerializeField] private TMP_Text adPanelTimerText;
     [SerializeField] private Image adPanelTimerBar;
 
-    public static GameManager Instance;
-    private bool _adPanelShowed;
-    public bool AdReviveUsed;
-    private float _adTimer;
+    private Sequence _winTween;
     private Sequence _startGameSequence;
-    public Action LoseEvent;
-    public Action WinEvent;
-    public bool isGameStarted;
+
+    private bool _sessionStarted;
+    private bool _gameplayActive;
+    private bool _adPanelVisible;
+    private bool _adReviveUsed;
+    private bool _isProcessingLose;
+
+    private float _adTimer;
+    private HexCell _pendingMineCell;
+    private int _pendingLevel;
 
     private void Awake()
     {
-        Instance = this;
+        _adTimer = adPanelTimer;
+
+        if (campaignManager != null)
+        {
+            campaignManager.Initialize(this);
+        }
+
+        if (userRatingManager != null)
+        {
+            userRatingManager.RankPromoted += HandleRankPromoted;
+        }
     }
 
     private void Start()
     {
-        _adTimer = adPanelTimer;
+        BuildWinTween();
+        BuildStartSequence();
+        UpdateAdTimerUI();
 
-        _winTween = DOTween.Sequence()
-        .AppendCallback(() => winPanel.gameObject.SetActive(true))
-        .Append(winPanel.DOScale(1.4f, 0.7f).SetEase(Ease.OutBounce))
-        .InsertCallback(0.2f, () => winParticles.Play())
-        .AppendInterval(1.5f)
-        .Append(winPanel.DOScale(0.5f, 0.3f).SetEase(Ease.OutBounce))
-        .SetAutoKill(false)
-        .OnComplete(() => winPanel.gameObject.SetActive(false));
+        if (gameplayGroup != null)
+        {
+            gameplayGroup.alpha = 0f;
+            gameplayGroup.gameObject.SetActive(false);
+        }
 
-        _startGameSequence = DOTween.Sequence()
-        .Append(menuGroup.DOFade(0, 1f))
-        .Join(menuGroup.transform.DOScale(2f, 1f))
-        .SetAutoKill(false)
-        .OnComplete(() => { menuGroup.gameObject.SetActive(false); isGameStarted = true; menuGroup.transform.localScale = new Vector3(1, 1, 1); });
+        userRatingManager?.BroadcastState();
     }
 
     private void Update()
     {
-        AdTimer();
+        UpdateAdTimer();
     }
 
     public void StartGame()
     {
-        _startGameSequence.Restart();
+        if (_sessionStarted) return;
 
-        gameplayGroup.gameObject.SetActive(true);
-        gameplayGroup.DOFade(1, 1f).Play();
-    }
+        _sessionStarted = true;
+        _adReviveUsed = false;
 
-    public void ShowWinPanel()
-    {
-        // winParticles.Play();
-        _winTween.Restart();
-        isGameStarted = true;
+        DisableGameplay();
+        campaignManager?.BeginCampaign();
 
-        // await UniTask.Delay(TimeSpan.FromSeconds(2.5f));
-    }
-
-    public void ShowLosePanel()
-    {
-
-    }
-
-    private void AdTimer()
-    {
-        if (_adPanelShowed && adPanel.gameObject.activeInHierarchy)
+        if (gameplayGroup != null)
         {
-            if (_adTimer >= 0f)
-            {
-                _adTimer -= Time.deltaTime;
-            }
-            else
-            {
-                ShowAdPanel(false);
-
-                LoseEvent?.Invoke();
-            }
-
-            adPanelTimerBar.fillAmount = _adTimer / adPanelTimer;
-            adPanelTimerText.text = _adTimer.ToString("F1") + "s";
+            gameplayGroup.gameObject.SetActive(true);
+            gameplayGroup.alpha = 0f;
+            gameplayGroup.DOFade(1f, 1f).Play();
         }
-    }
 
-    public void UpdateLevelText(int level)
-    {
-        levelText.text = $"Уровень {level}";
-    }
-
-    public async void ShowAdPanel(bool show)
-    {
-        await UniTask.Delay(TimeSpan.FromSeconds(1f));
-
-        if (show)
+        if (menuGroup != null)
         {
-            adPanel.gameObject.SetActive(true);
-            adPanel.anchoredPosition = new Vector2(0, -1600);
-
-            adPanel.DOAnchorPosY(0f, 0.5f)
-            .SetEase(Ease.OutSine)
-            .Play();
-
-            _adPanelShowed = true;
+            menuGroup.gameObject.SetActive(true);
         }
-        else
-        {
-            adPanel.DOAnchorPosY(-1600f, 0.8f)
-            .SetEase(Ease.OutSine)
-            .Play()
-            .OnComplete(() => adPanel.gameObject.SetActive(false));
 
-            _adPanelShowed = false;
-        }
+        _startGameSequence?.Restart();
     }
 
     public void ShowAd()
     {
-        AdReviveUsed = true;
+        if (_pendingMineCell == null || _isProcessingLose) return;
 
-        adPanel.DOAnchorPosY(-1600f, 0.8f)
-        .SetEase(Ease.OutSine)
-        .Play()
-        .OnComplete(() => adPanel.gameObject.SetActive(false));
-
-        WinEvent.Invoke();
+        _adReviveUsed = true;
+        HideAdPanel();
+        ResolveLevelCompletion(_pendingLevel);
     }
 
     public void SkipAd()
     {
-        adPanel.DOAnchorPosY(-1600f, 0.8f)
-        .SetEase(Ease.OutSine)
-        .Play()
-        .OnComplete(() => adPanel.gameObject.SetActive(false));
-
-        LoseEvent?.Invoke();
+        TriggerLose();
     }
 
     public void Lose()
     {
-        LoseEvent?.Invoke();
+        TriggerLose();
     }
 
     public void ShowNewRankPanel(string previousRank, string newRank)
     {
+        // Hook up dedicated UI panel here.
+    }
 
+    public void UpdateLevelText(int level)
+    {
+        if (levelText != null)
+        {
+            levelText.text = $"Уровень {level}";
+        }
+    }
+
+    public void OnLevelStarted(int level, HexGrid grid)
+    {
+        UpdateLevelText(level);
+        ResetAdPanelState();
+        ClearPendingMine();
+    }
+
+    public void OnLevelCompleted(int level)
+    {
+        // Победа: звук перед показом анимации победы
+        SoundManager.Instance?.Play(SfxType.Win);
+        ResolveLevelCompletion(level);
+    }
+
+    public void OnMineTriggered(int level, HexCell mineCell)
+    {
+        if (_isProcessingLose) return;
+
+        _pendingLevel = level;
+        _pendingMineCell = mineCell;
+
+    DisableGameplay();
+
+    // Шанс дропа монеты из мины
+    CoinsManager.Instance?.TryDropFromMine(mineCell != null ? mineCell.transform.position : Vector3.zero);
+
+        if (!_adReviveUsed)
+        {
+            ShowAdPanel();
+        }
+        else
+        {
+            TriggerLose();
+        }
+    }
+
+    private void ResolveLevelCompletion(int level)
+    {
+        DisableGameplay();
+
+        _winTween?.Restart();
+
+        if (userRatingManager != null)
+        {
+            userRatingManager.AddPoints(level * level);
+        }
+
+        ResetAdPanelState();
+        ClearPendingMine();
+
+        campaignManager?.AdvanceToNextLevel();
+        EnableGameplay();
+    }
+
+    private void BuildWinTween()
+    {
+        if (winPanel == null) return;
+
+        winPanel.gameObject.SetActive(false);
+
+        _winTween = DOTween.Sequence()
+            .AppendCallback(() => winPanel.gameObject.SetActive(true))
+            .Append(winPanel.DOScale(1.4f, 0.7f).SetEase(Ease.OutBounce))
+            .InsertCallback(0.2f, () => { winParticles?.Play(); SoundManager.Instance?.Play(SfxType.Win_Confetti); })
+            .AppendInterval(1.5f)
+            .Append(winPanel.DOScale(0.5f, 0.3f).SetEase(Ease.OutBounce))
+            .SetAutoKill(false)
+            .OnComplete(() =>
+            {
+                winPanel.gameObject.SetActive(false);
+            });
+    }
+
+    private void BuildStartSequence()
+    {
+        if (menuGroup == null) return;
+
+        _startGameSequence = DOTween.Sequence()
+            .Append(menuGroup.DOFade(0f, 1f))
+            .Join(menuGroup.transform.DOScale(2f, 1f))
+            .SetAutoKill(false)
+            .OnComplete(() =>
+            {
+                menuGroup.gameObject.SetActive(false);
+                menuGroup.transform.localScale = Vector3.one;
+                EnableGameplay();
+            });
+    }
+
+    private void EnableGameplay()
+    {
+        if (!_sessionStarted) return;
+
+        _gameplayActive = true;
+        campaignManager?.EnableInput(true);
+    }
+
+    private void DisableGameplay()
+    {
+        _gameplayActive = false;
+        campaignManager?.EnableInput(false);
+    }
+
+    private void ShowAdPanel()
+    {
+        if (adPanel == null) return;
+
+        _adPanelVisible = true;
+        _adTimer = adPanelTimer;
+        UpdateAdTimerUI();
+
+        adPanel.gameObject.SetActive(true);
+        adPanel.anchoredPosition = new Vector2(0f, -1600f);
+
+        adPanel
+            .DOAnchorPosY(0f, 0.5f)
+            .SetEase(Ease.OutSine)
+            .Play();
+    }
+
+    private void HideAdPanel()
+    {
+        if (adPanel == null) return;
+
+        _adPanelVisible = false;
+        _adTimer = adPanelTimer;
+        UpdateAdTimerUI();
+
+        adPanel
+            .DOAnchorPosY(-1600f, 0.8f)
+            .SetEase(Ease.OutSine)
+            .Play()
+            .OnComplete(() => adPanel.gameObject.SetActive(false));
+    }
+
+    private void UpdateAdTimer()
+    {
+        if (!_adPanelVisible || adPanel == null || !adPanel.gameObject.activeInHierarchy) return;
+
+        _adTimer -= Time.deltaTime;
+        if (_adTimer <= 0f)
+        {
+            _adTimer = 0f;
+            UpdateAdTimerUI();
+            TriggerLose();
+            return;
+        }
+
+        UpdateAdTimerUI();
+    }
+
+    private void UpdateAdTimerUI()
+    {
+        float fill = 1f;
+        if (Math.Abs(adPanelTimer) > Mathf.Epsilon)
+        {
+            fill = Mathf.Clamp01(_adTimer / adPanelTimer);
+        }
+
+        if (adPanelTimerBar != null)
+        {
+            adPanelTimerBar.fillAmount = fill;
+        }
+
+        if (adPanelTimerText != null)
+        {
+            adPanelTimerText.text = $"{Mathf.Max(_adTimer, 0f):F1}s";
+        }
+    }
+
+    private void TriggerLose()
+    {
+        if (_isProcessingLose) return;
+        _isProcessingLose = true;
+
+        HideAdPanel();
+        ResetAdPanelState();
+
+        if (userRatingManager != null)
+        {
+            userRatingManager.RemovePoints(5);
+        }
+
+        // Проигрышный звук
+        SoundManager.Instance?.Play(SfxType.Lose);
+        _ = ResolveLoseAsync();
+    }
+
+    private async UniTask ResolveLoseAsync()
+    {
+        if (campaignManager != null)
+        {
+            await campaignManager.PlayLoseSequenceAsync(_pendingMineCell);
+        }
+
+        ShowLosePanel();
+        ClearPendingMine();
+        _isProcessingLose = false;
+    }
+
+    private void ResetAdPanelState()
+    {
+        _adPanelVisible = false;
+        _adTimer = adPanelTimer;
+        UpdateAdTimerUI();
+    }
+
+    private void ClearPendingMine()
+    {
+        _pendingMineCell = null;
+        _pendingLevel = 0;
+    }
+
+    private void HandleRankPromoted(string previousRank, string currentRank)
+    {
+        ShowNewRankPanel(previousRank, currentRank);
+        SoundManager.Instance?.Play(SfxType.Rank_Up);
+    }
+
+    private void ShowLosePanel()
+    {
+        // Implement dedicated lose UI here.
+    }
+
+    private void OnDestroy()
+    {
+        if (userRatingManager != null)
+        {
+            userRatingManager.RankPromoted -= HandleRankPromoted;
+        }
     }
 }

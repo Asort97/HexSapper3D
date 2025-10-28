@@ -120,6 +120,10 @@ MonoBehaviour:
   flagRenderer: {fileID: 2292134851986450088}
   explosionParticle: {fileID: 2433282508523890284, guid: 3ef3ae421f71c5c4e97fe12dc2fc6312,
     type: 3}
+  hoverHeightSelf: 1
+  hoverHeightNeighbor: 0.5
+  hoverDuration: 0.12
+  hoverEase: 6
 --- !u!64 &3137638171831530128
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -198,7 +202,7 @@ MeshRenderer:
   m_RayTraceProcedural: 0
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 4294967040
   m_RendererPriority: 0
   m_Materials:
   - {fileID: -4621511604542241181, guid: 2c5d0319ed85e504bb0dd61825434f1d, type: 2}
