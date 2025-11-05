@@ -5,12 +5,16 @@ namespace YG
     public class SavesYG
     {
         // "Технические сохранения" для работы плагина (Не удалять)
-        public int idSave;
-        public bool isFirstSession = true;
-        public string language = "ru";
-        public bool promptDone;
-        public int score;
-        public int rank;
+    public int idSave;
+    public bool isFirstSession = true;
+    public string language = "ru";
+    public bool promptDone;
+    public int score;
+    public int rank;
+
+    // Настройки пользователя
+    public float sfxVolume = 1f;
+    public float ambientVolume = 1f;
         
         // Вы можете выполнить какие то действия при загрузке сохранений
         public SavesYG()

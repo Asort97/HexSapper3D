@@ -2,6 +2,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using TMPro;
+using UniRx.Triggers;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,79 +11,64 @@ public class GameManager : MonoBehaviour, ICampaignListener
     [Header("Core Managers")]
     [SerializeField] private CampaignManager campaignManager;
     [SerializeField] private UserRatingManager userRatingManager;
+    [SerializeField] private CameraZoomController cameraController;
 
-    [Header("UI")]
+    [Header("UI Panels")]
     [SerializeField] private TMP_Text levelText;
-    [SerializeField] private CanvasGroup menuGroup;
+    [SerializeField] private MainMenuPanel mainMenu;
     [SerializeField] private CanvasGroup gameplayGroup;
-
-    [Header("Win UI")]
-    [SerializeField] private RectTransform winPanel;
-    [SerializeField] private ParticleSystem winParticles;
-
-    [Header("Ad Revive")]
-    [SerializeField] private RectTransform adPanel;
-    [SerializeField] private float adPanelTimer = 10f;
-    [SerializeField] private TMP_Text adPanelTimerText;
-    [SerializeField] private Image adPanelTimerBar;
-
-    private Sequence _winTween;
-    private Sequence _startGameSequence;
+    [SerializeField] private WinPanel winPanel;
+    [SerializeField] private AdPanel adPanel;
+    [SerializeField] private SettingsPanel settingsPanel;
 
     private bool _sessionStarted;
     private bool _gameplayActive;
-    private bool _adPanelVisible;
     private bool _adReviveUsed;
     private bool _isProcessingLose;
+    private bool _settingsMenuOpen;
 
-    private float _adTimer;
     private HexCell _pendingMineCell;
     private int _pendingLevel;
 
     private void Awake()
     {
-        _adTimer = adPanelTimer;
-
         if (campaignManager != null)
         {
             campaignManager.Initialize(this);
         }
 
+        if (campaignManager == null)
+        {
+            Debug.LogWarning("GameManager: CampaignManager not assigned in inspector. The level will not start until assigned.");
+        }
+
+            if (cameraController == null)
+            {
+                Debug.LogWarning("GameManager: CameraZoomController not assigned in inspector. Please assign it to enable camera input control.");
+            }
+
         if (userRatingManager != null)
         {
             userRatingManager.RankPromoted += HandleRankPromoted;
         }
-    }
 
-    private void Start()
-    {
-        BuildWinTween();
-        BuildStartSequence();
-        UpdateAdTimerUI();
-
-        if (gameplayGroup != null)
+        // Подписываемся на истечение таймера ad панели
+        if (adPanel != null)
         {
-            gameplayGroup.alpha = 0f;
-            gameplayGroup.gameObject.SetActive(false);
+            adPanel.OnTimerExpired += TriggerLose;
         }
-
-        userRatingManager?.BroadcastState();
     }
 
-    private void Update()
-    {
-        UpdateAdTimer();
-    }
-
+    // Вызывается из UI кнопки "Start" — запускает ввод и скрывает меню
     public void StartGame()
     {
-        if (_sessionStarted) return;
-
-        _sessionStarted = true;
-        _adReviveUsed = false;
-
-        DisableGameplay();
-        campaignManager?.BeginCampaign();
+        if (!_sessionStarted)
+        {
+            _sessionStarted = true;
+            _adReviveUsed = false;
+            // Если кампания ещё не начала — запустить
+            campaignManager?.BeginCampaign();
+        }
 
         if (gameplayGroup != null)
         {
@@ -91,12 +77,52 @@ public class GameManager : MonoBehaviour, ICampaignListener
             gameplayGroup.DOFade(1f, 1f).Play();
         }
 
-        if (menuGroup != null)
+        EnableGameplay();
+
+        if (mainMenu != null)
         {
-            menuGroup.gameObject.SetActive(true);
+            mainMenu.Hide();
+        }
+        else
+        {
+            Debug.LogWarning("GameManager: mainMenu not assigned in inspector. Cannot hide the main menu UI.");
+        }
+    }
+
+    private void Start()
+    {
+        if (gameplayGroup != null)
+        {
+            gameplayGroup.alpha = 0f;
+            gameplayGroup.gameObject.SetActive(false);
+        }
+        if (adPanel == null)
+        {
+            Debug.LogWarning("GameManager: AdPanel not assigned in inspector. Assign AdPanel to enable ad revive flow.");
         }
 
-        _startGameSequence?.Restart();
+        // Запускаем кампанию при старте сцены, но не даём ввод до нажатия Start
+        campaignManager?.BeginCampaign();
+
+        if (_sessionStarted) return;
+
+        _sessionStarted = true;
+        _adReviveUsed = false;
+
+        if (gameplayGroup != null)
+        {
+            gameplayGroup.gameObject.SetActive(true);
+            gameplayGroup.alpha = 0f;
+            gameplayGroup.DOFade(1f, 1f).Play();
+        }
+
+        // Отключаем ввод — игрок начнёт игру через StartGame()
+        DisableGameplay();
+
+        if (mainMenu != null)
+        {
+            // оставляем главное меню видимым; StartGame() скроет его
+        }
     }
 
     public void ShowAd()
@@ -134,7 +160,6 @@ public class GameManager : MonoBehaviour, ICampaignListener
     public void OnLevelStarted(int level, HexGrid grid)
     {
         UpdateLevelText(level);
-        ResetAdPanelState();
         ClearPendingMine();
     }
 
@@ -152,10 +177,7 @@ public class GameManager : MonoBehaviour, ICampaignListener
         _pendingLevel = level;
         _pendingMineCell = mineCell;
 
-    DisableGameplay();
-
-    // Шанс дропа монеты из мины
-    CoinsManager.Instance?.TryDropFromMine(mineCell != null ? mineCell.transform.position : Vector3.zero);
+        DisableGameplay();
 
         if (!_adReviveUsed)
         {
@@ -171,53 +193,18 @@ public class GameManager : MonoBehaviour, ICampaignListener
     {
         DisableGameplay();
 
-        _winTween?.Restart();
+        if (winPanel != null)
+            winPanel.Show();
 
         if (userRatingManager != null)
         {
             userRatingManager.AddPoints(level * level);
         }
 
-        ResetAdPanelState();
         ClearPendingMine();
 
         campaignManager?.AdvanceToNextLevel();
         EnableGameplay();
-    }
-
-    private void BuildWinTween()
-    {
-        if (winPanel == null) return;
-
-        winPanel.gameObject.SetActive(false);
-
-        _winTween = DOTween.Sequence()
-            .AppendCallback(() => winPanel.gameObject.SetActive(true))
-            .Append(winPanel.DOScale(1.4f, 0.7f).SetEase(Ease.OutBounce))
-            .InsertCallback(0.2f, () => { winParticles?.Play(); SoundManager.Instance?.Play(SfxType.Win_Confetti); })
-            .AppendInterval(1.5f)
-            .Append(winPanel.DOScale(0.5f, 0.3f).SetEase(Ease.OutBounce))
-            .SetAutoKill(false)
-            .OnComplete(() =>
-            {
-                winPanel.gameObject.SetActive(false);
-            });
-    }
-
-    private void BuildStartSequence()
-    {
-        if (menuGroup == null) return;
-
-        _startGameSequence = DOTween.Sequence()
-            .Append(menuGroup.DOFade(0f, 1f))
-            .Join(menuGroup.transform.DOScale(2f, 1f))
-            .SetAutoKill(false)
-            .OnComplete(() =>
-            {
-                menuGroup.gameObject.SetActive(false);
-                menuGroup.transform.localScale = Vector3.one;
-                EnableGameplay();
-            });
     }
 
     private void EnableGameplay()
@@ -225,80 +212,29 @@ public class GameManager : MonoBehaviour, ICampaignListener
         if (!_sessionStarted) return;
 
         _gameplayActive = true;
-        campaignManager?.EnableInput(true);
+
+        if (!_settingsMenuOpen)
+        {
+            campaignManager?.EnableInput(true);
+            cameraController?.SetInputEnabled(true);
+        }
     }
 
     private void DisableGameplay()
     {
         _gameplayActive = false;
         campaignManager?.EnableInput(false);
+        cameraController?.SetInputEnabled(false);
     }
 
     private void ShowAdPanel()
     {
-        if (adPanel == null) return;
-
-        _adPanelVisible = true;
-        _adTimer = adPanelTimer;
-        UpdateAdTimerUI();
-
-        adPanel.gameObject.SetActive(true);
-        adPanel.anchoredPosition = new Vector2(0f, -1600f);
-
-        adPanel
-            .DOAnchorPosY(0f, 0.5f)
-            .SetEase(Ease.OutSine)
-            .Play();
+        adPanel?.Show();
     }
 
     private void HideAdPanel()
     {
-        if (adPanel == null) return;
-
-        _adPanelVisible = false;
-        _adTimer = adPanelTimer;
-        UpdateAdTimerUI();
-
-        adPanel
-            .DOAnchorPosY(-1600f, 0.8f)
-            .SetEase(Ease.OutSine)
-            .Play()
-            .OnComplete(() => adPanel.gameObject.SetActive(false));
-    }
-
-    private void UpdateAdTimer()
-    {
-        if (!_adPanelVisible || adPanel == null || !adPanel.gameObject.activeInHierarchy) return;
-
-        _adTimer -= Time.deltaTime;
-        if (_adTimer <= 0f)
-        {
-            _adTimer = 0f;
-            UpdateAdTimerUI();
-            TriggerLose();
-            return;
-        }
-
-        UpdateAdTimerUI();
-    }
-
-    private void UpdateAdTimerUI()
-    {
-        float fill = 1f;
-        if (Math.Abs(adPanelTimer) > Mathf.Epsilon)
-        {
-            fill = Mathf.Clamp01(_adTimer / adPanelTimer);
-        }
-
-        if (adPanelTimerBar != null)
-        {
-            adPanelTimerBar.fillAmount = fill;
-        }
-
-        if (adPanelTimerText != null)
-        {
-            adPanelTimerText.text = $"{Mathf.Max(_adTimer, 0f):F1}s";
-        }
+        adPanel?.Hide();
     }
 
     private void TriggerLose()
@@ -307,7 +243,6 @@ public class GameManager : MonoBehaviour, ICampaignListener
         _isProcessingLose = true;
 
         HideAdPanel();
-        ResetAdPanelState();
 
         if (userRatingManager != null)
         {
@@ -331,13 +266,6 @@ public class GameManager : MonoBehaviour, ICampaignListener
         _isProcessingLose = false;
     }
 
-    private void ResetAdPanelState()
-    {
-        _adPanelVisible = false;
-        _adTimer = adPanelTimer;
-        UpdateAdTimerUI();
-    }
-
     private void ClearPendingMine()
     {
         _pendingMineCell = null;
@@ -355,11 +283,40 @@ public class GameManager : MonoBehaviour, ICampaignListener
         // Implement dedicated lose UI here.
     }
 
+    public void OpenSettingsMenu(bool active)
+    {
+        if (settingsPanel == null) return;
+
+        _settingsMenuOpen = active;
+
+        if (active)
+        {
+            settingsPanel.Open();
+            campaignManager?.EnableInput(false);
+            cameraController?.SetInputEnabled(false);
+        }
+        else
+        {
+            settingsPanel.Close();
+
+            if (_gameplayActive)
+            {
+                campaignManager?.EnableInput(true);
+                cameraController?.SetInputEnabled(true);
+            }
+        }
+    }
+
     private void OnDestroy()
     {
         if (userRatingManager != null)
         {
             userRatingManager.RankPromoted -= HandleRankPromoted;
+        }
+        
+        if (adPanel != null)
+        {
+            adPanel.OnTimerExpired -= TriggerLose;
         }
     }
 }

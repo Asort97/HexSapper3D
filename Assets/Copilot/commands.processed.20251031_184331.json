@@ -1,0 +1,1 @@
+{"commands":[{"type":"SetProperty","target":"Canvas/CoinsManager","component":"CoinsManager","property":"coinText","valuePath":"Canvas/CoinsAnchor/Text (TMP)","objectType":"TMPro.TextMeshProUGUI"}]}

@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Управляет монетами: выпадение с мины, полёт и анимация счётчика.
+/// Управляет монетами: выпадение с раскрытых клеток, полёт и анимация счётчика.
 /// Разместите в сцене (желательно под Canvas) и задайте ссылки в инспекторе.
 /// </summary>
 public class CoinsManager : MonoBehaviour
@@ -22,7 +22,7 @@ public class CoinsManager : MonoBehaviour
 
     [Header("Config")]
     [SerializeField, Range(0f, 1f)] private float dropChanceFromMine = 0.5f;
-    [SerializeField] private int coinValuePerDrop = 10; // 1 выпавшая монета = +10 в счётчик
+    [SerializeField] private int coinValuePerDrop = 1; // 1 выпавшая монета = +N в счётчик
 
     private int _coins;
     private int _visibleCoins;
@@ -49,56 +49,86 @@ public class CoinsManager : MonoBehaviour
             coinText.text = _visibleCoins.ToString();
     }
 
-    public bool TryDropFromMine(Vector3 worldPos)
+    public bool TryDropCoin(Vector3 worldPos)
     {
         if (UnityEngine.Random.value > dropChanceFromMine) return false;
-        SpawnAndFlyCoin(worldPos, coinValuePerDrop);
+        
+        // Спавним несколько монеток
+        int coinCount = coinValuePerDrop;
+        for (int i = 0; i < coinCount; i++)
+        {
+            float delay = i * 0.08f; // задержка между спавном монеток
+            SpawnSingleCoin(worldPos, 1, delay);
+        }
         return true;
     }
 
-    public void SpawnAndFlyCoin(Vector3 worldPos, int amount)
+    private async void SpawnSingleCoin(Vector3 worldPos, int amount, float delay)
     {
-        if (canvas == null || coinTarget == null || flyingCoinPrefab == null) return;
+        if (canvas == null || coinTarget == null || flyingCoinPrefab == null)
+        {
+            Debug.LogWarning("[CoinsManager] Missing references: canvas, coinTarget or flyingCoinPrefab!");
+            return;
+        }
+
+        // Ждём задержку
+        if (delay > 0)
+        {
+            await UniTask.Delay((int)(delay * 1000));
+        }
 
         // Создаём летящую иконку монеты
         var icon = Instantiate(flyingCoinPrefab, canvas.transform);
+        icon.gameObject.SetActive(true);
         var iconRt = icon.rectTransform;
-        iconRt.sizeDelta = new Vector2(64, 64);
         icon.color = Color.yellow;
+        icon.raycastTarget = false;
 
-        var screen = Camera.main != null ? Camera.main.WorldToScreenPoint(worldPos) : worldPos;
-        if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
-        {
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                canvas.transform as RectTransform, screen, null, out var localPoint);
-            iconRt.anchoredPosition = localPoint;
-        }
-        else
-        {
-            var cam = worldCamera != null ? worldCamera : Camera.main;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                canvas.transform as RectTransform, screen, cam, out var localPoint);
-            iconRt.anchoredPosition = localPoint;
-        }
+        // Добавляем случайный разброс к стартовой позиции
+        Vector3 randomOffset = new Vector3(
+            UnityEngine.Random.Range(-5f, 5f),
+            UnityEngine.Random.Range(-5f, 5f),
+            0f
+        );
 
-        // Анимация полёта к целевой иконке
-        SoundManager.Instance?.Play(SfxType.Coin_Spawn);
-        iconRt
-            .DOScale(1.0f, 0.15f)
-            .From(0.2f)
-            .SetEase(Ease.OutBack);
+        // Конвертируем мировую позицию клетки в UI координаты
+        Vector2 startPos;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            canvas.transform as RectTransform,
+            RectTransformUtility.WorldToScreenPoint(Camera.main, worldPos + randomOffset),
+            null,
+            out startPos);
+        iconRt.anchoredPosition = startPos;
 
-        var targetPos = coinTarget.anchoredPosition;
-        iconRt
-            .DOAnchorPos(targetPos, 0.8f)
-            .SetEase(Ease.InCubic)
-            .OnComplete(() =>
+        // Целевая позиция — просто localPosition цели
+        Vector2 endPos = coinTarget.localPosition;
+
+        // SEQUENCE: появление → полёт
+        var seq = DOTween.Sequence();
+        iconRt.localScale = Vector3.one * 0.1f;
+        seq.Append(iconRt.DOScale(1.0f, 0.22f).SetEase(Ease.OutBack));
+        seq.AppendInterval(0.05f);
+        seq.Append(iconRt.DOAnchorPos(endPos, 0.8f).SetEase(Ease.InCubic));
+        seq.OnStart(() => {
+            SoundManager.Instance?.Play(SfxType.Coin_Spawn);
+        });
+        seq.OnStepComplete(() => {
+            // ...existing code...
+        });
+        seq.OnComplete(() => {
+            SoundManager.Instance?.Play(SfxType.Coin_Fly);
+            Destroy(icon.gameObject);
+            if (coinTarget != null)
             {
-                SoundManager.Instance?.Play(SfxType.Coin_Fly);
-                Destroy(icon.gameObject);
-                AddCoinsAnimated(amount);
-            })
-            .Play();
+                coinTarget.DOKill();
+                coinTarget.DOScale(1.15f, 0.05f).SetEase(Ease.OutQuad).OnComplete(() =>
+                {
+                    coinTarget.DOScale(1f, 0.1f).SetEase(Ease.InOutQuad).Play();
+                }).Play();
+            }
+            AddCoinsAnimated(amount);
+        });
+        seq.Play();
     }
 
     public void AddCoinsAnimated(int amount)

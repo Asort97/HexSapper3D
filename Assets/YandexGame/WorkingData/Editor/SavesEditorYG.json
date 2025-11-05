@@ -1,8 +1,10 @@
 {
-    "idSave": 132,
+    "idSave": 1932,
     "isFirstSession": false,
     "language": "ru",
     "promptDone": false,
-    "score": 1629,
-    "rank": 3
+    "score": 1592,
+    "rank": 3,
+    "sfxVolume": 0.0,
+    "ambientVolume": 0.0
 }

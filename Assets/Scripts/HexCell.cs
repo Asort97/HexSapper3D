@@ -2,7 +2,7 @@ using UnityEngine;
 using System;
 using TMPro;
 using DG.Tweening;
-using System.Collections.Generic;
+
 public class HexCell : MonoBehaviour
 {
     [Header("Axial coords")]
@@ -89,7 +89,7 @@ public class HexCell : MonoBehaviour
         AdjacentMines = n;
     }
 
-    public void Reveal()
+    public void Reveal(bool isPlayerClick = false)
     {
         if (Revealed || Flagged) return;
 
@@ -103,6 +103,14 @@ public class HexCell : MonoBehaviour
 
         // На всякий случай опускаем клетку при раскрытии
         ResetHoverHeight(hoverDuration * 0.6f);
+
+        // Шанс дропа монеты ТОЛЬКО от прямого клика игрока (не auto-reveal)
+        if (isPlayerClick && !IsMine && grid != null && grid.IsFirstClickDone)
+        {
+            CoinsManager.Instance?.TryDropCoin(transform.position);
+
+            ComboStrikeManager.Instance?.TryAddCombo();
+        }
 
         OnReveal?.Invoke(this);
     }
@@ -166,24 +174,43 @@ public class HexCell : MonoBehaviour
         gameObject.SetActive(false);
     }
 
-    // Для быстрого теста кликом мыши
-    public void OnMouseDown()
-    {
-        if (!grid.CanInteract) return;
-
-        Reveal();
-    }
-
-    public void OnMouseOver()
-    {
-        if (!grid.CanInteract) return;
+    // Клик мышью
+public void OnMouseDown()
+{
+    if (!grid.CanInteract) return;
     
-        if (Input.GetMouseButtonDown(1)) ToggleFlag();
+    // ПКМ — постановка флага
+    if (Input.GetMouseButtonDown(1))
+    {
+        ToggleFlag();
+        return;
+    }
+    
+    // ЛКМ — раскрытие клетки
+    if (Input.GetMouseButtonDown(0))
+    {
+        Reveal(true);
+    }
+}
+
+public void OnMouseOver()
+    {
+        if (!grid.CanInteract) return;
+
+        // ПКМ — постановка флага
+        if (Input.GetMouseButtonDown(1))
+        {
+            ToggleFlag();
+            return;
+        }
 
         SetHighlight(true);
 
-        // Поднятие основной клетки
-        SetHoverHeight(hoverHeightSelf, hoverDuration);
+        // Поднятие основной клетки — только если нет флага
+        if (!Flagged)
+            SetHoverHeight(hoverHeightSelf, hoverDuration);
+        else
+            SetHoverHeight(0f, hoverDuration);
 
         // Поднимаем только нераскрытых соседей
         if (grid != null)

@@ -26,17 +26,28 @@ public class HexGrid : MonoBehaviour
     private bool _isDestroying;
    private bool firstClickDone = false;
    private bool _bulkRevealing = false;
-    private bool _canInteract = true;
+    private bool _canInteract = false;  // Начинаем с выключенным, включим явно через SetInteractionState
 
     public IEnumerable<HexCell> GetAllCells() => cells.Values;
     public HexCell LastRevealedCell;
     public bool CanInteract => _canInteract && !_isDestroying;
+    public bool IsFirstClickDone => firstClickDone;
     public Action OnGridCompleted;
     public event Action<HexCell> MineTriggered;
 
     public void SetInteractionState(bool enabled)
     {
         _canInteract = enabled;
+        
+        // Отключаем/включаем коллайдеры всех ячеек, чтобы Unity не вызывал OnMouse* методы
+        foreach (var cell in cells.Values)
+        {
+            var collider = cell.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.enabled = enabled;
+            }
+        }
     }
 
     private static readonly (int dq, int dr)[] DIRS = {
@@ -47,7 +58,7 @@ public class HexGrid : MonoBehaviour
     private void Start()
     {
         randomSeed = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
-        GenerateEmptyGridHex(); // Только сетка, без мин
+        // НЕ генерируем здесь - это делает CampaignManager
     }
 
     [ContextMenu("Generate grid")]
@@ -213,7 +224,7 @@ public class HexGrid : MonoBehaviour
 
         // if (c.Revealed) return;
 
-        c.Reveal();
+        c.Reveal(false);
         revealedSafeCells++;
         CheckIfGridDone();
 
@@ -228,7 +239,7 @@ public class HexGrid : MonoBehaviour
         var q = new Queue<HexCell>();
         var vis = new HashSet<HexCell>();
 
-        start.Reveal();
+            start.Reveal(false);
         q.Enqueue(start);
         vis.Add(start);
 
@@ -238,7 +249,7 @@ public class HexGrid : MonoBehaviour
             foreach (var n in GetNeighbors(cur.q, cur.r))
             {
                 if (n.Revealed || n.Flagged || n.IsMine) continue;
-                n.Reveal();
+                    n.Reveal(false);
                 if (n.AdjacentMines == 0 && vis.Add(n))
                     q.Enqueue(n);
             }
@@ -295,7 +306,7 @@ public class HexGrid : MonoBehaviour
             {
                 var col = cell.GetComponent<Collider>();
                 if (col) col.enabled = false;
-                if (!cell.Revealed) cell.Reveal();
+                    if (!cell.Revealed) cell.Reveal(false);
                 cell.ExplodeCell();
 
                 if (jitterPerCell > 0f)

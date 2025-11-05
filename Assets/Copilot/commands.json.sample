@@ -1,0 +1,22 @@
+{
+  "commands": [
+    {
+      "type": "CreateEmpty",
+      "name": "CoinsManager",
+      "parent": "Canvas"
+    },
+    {
+      "type": "AddComponent",
+      "target": "Canvas/CoinsManager",
+      "component": "CoinsManager"
+    },
+    {
+      "type": "SetProperty",
+      "target": "Canvas/CoinsManager",
+      "component": "CoinsManager",
+      "property": "coinsText",
+      "valuePath": "Canvas/Gameplay/curr",
+      "objectType": "TMPro.TextMeshProUGUI"
+    }
+  ]
+}
